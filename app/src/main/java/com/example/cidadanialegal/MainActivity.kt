@@ -1,5 +1,7 @@
 package com.example.cidadanialegal
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -42,6 +45,8 @@ data class DireitoCategoria(val titulo: String, val icon: ImageVector, val topic
 data class GlossarioTermo(val termo: String, val definicao: String)
 data class FaqItem(val pergunta: String, val resposta: String)
 data class Mensagem(val texto: String, val eDoUsuario: Boolean, val estaEscrevendo: Boolean = false)
+data class ParceiroPrincipal(val icon: ImageVector, val nome: String, val descricao: String, val telefone: String?, val site: String?)
+
 
 // --- Rotas de Navegação ---
 object Routes {
@@ -451,29 +456,45 @@ fun DenunciaScreen() {
     }
 }
 
+// --- ECRÃ PARCEIROS E APOIO (NOVA VERSÃO) ---
 @Composable
 fun ParceirosScreen() {
-    val parceiros = listOf(
-        "Defensoria Pública do Estado" to "Assistência jurídica gratuita. Verifique o endereço e telefone da sua cidade.",
-        "Centro de Referência da Mulher" to "Apoio psicossocial e jurídico para mulheres em situação de violência.",
-        "ONG Cidadania LGBTQIA+" to "Acolhimento e orientação para a população LGBTQIA+.",
-        "Movimento Negro Unificado" to "Atua na luta contra o racismo e pela igualdade racial."
-    )
-
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Parceiros e Apoio", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 8.dp)) }
-        items(parceiros) { (nome, descricao) ->
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(nome, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.height(8.dp))
-                    Text(descricao, style = MaterialTheme.typography.bodyLarge)
-                }
-            }
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Icon(
+                imageVector = Icons.Filled.Handshake,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.fillMaxWidth().wrapContentSize(Alignment.Center).size(48.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "Parceiros e Apoio",
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                "Organizações parceiras que podem ajudar você",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(16.dp))
         }
+
+        item { EmergencyNumbersCard() }
+
+        items(parceirosPrincipais) { parceiro ->
+            ParceiroPrincipalCard(parceiro = parceiro)
+        }
+
+        item { OutrasOrganizacoesCard() }
     }
 }
-
 
 // --- COMPONENTES DE UI REUTILIZÁVEIS ---
 
@@ -529,7 +550,6 @@ fun SupportFeatureButton(navController: NavController, route: String, title: Str
         }
     }
 }
-
 
 @Composable
 fun CategoriaDireitoItem(categoria: DireitoCategoria, onTopicClick: (DireitoTopico) -> Unit) {
@@ -608,6 +628,109 @@ fun FaqItemCard(pergunta: String, resposta: String) {
     }
 }
 
+@Composable
+fun EmergencyNumbersCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Filled.Call, contentDescription = "Números de Emergência", tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text("Números de Emergência", style = MaterialTheme.typography.titleMedium)
+                Text("190 - Polícia | 193 - Bombeiros | 192 - SAMU", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+@Composable
+fun ParceiroPrincipalCard(parceiro: ParceiroPrincipal) {
+    val context = LocalContext.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = parceiro.icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(40.dp)
+                )
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text(parceiro.nome, style = MaterialTheme.typography.titleLarge)
+                    Text(parceiro.descricao, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (parceiro.telefone != null) {
+                    Button(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${parceiro.telefone}"))
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = MaterialTheme.shapes.medium,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Icon(Icons.Filled.Phone, contentDescription = "Ligar", tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text(parceiro.telefone, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                if (parceiro.site != null) {
+                    Button(
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(parceiro.site))
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = MaterialTheme.shapes.medium,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Icon(Icons.Filled.Language, contentDescription = "Site", tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Site", color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun OutrasOrganizacoesCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f))
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Favorite, contentDescription = "Outras Organizações", tint = MaterialTheme.colorScheme.secondary)
+                Spacer(Modifier.width(8.dp))
+                Text("Outras Organizações de Apoio", style = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.secondary))
+            }
+            Spacer(Modifier.height(16.dp))
+            outrosParceiros.forEach { nome ->
+                Text("• $nome", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(bottom = 4.dp))
+            }
+        }
+    }
+}
+
+
 // --- DADOS DA APLICAÇÃO (CONTEÚDO) ---
 
 val conteudoDireitos = listOf(
@@ -654,9 +777,26 @@ val conteudoFaq = listOf(
     FaqItem("Sofri um acidente de trabalho, quais meus direitos?", "Você tem direito à estabilidade no emprego por 12 meses após o retorno, além do auxílio-doença acidentário pago pelo INSS.")
 )
 
+val parceirosPrincipais = listOf(
+    ParceiroPrincipal(Icons.Filled.AccountBalance, "Defensoria Pública", "Assistência jurídica gratuita para quem não pode pagar advogado", "129", "https://www.defensoria.sp.def.br/"),
+    ParceiroPrincipal(Icons.Filled.Gavel, "Procon", "Proteção e defesa dos direitos do consumidor", "151", "https://www.procon.sp.gov.br/"),
+    ParceiroPrincipal(Icons.Filled.Female, "Central de Atendimento à Mulher", "Orientação para mulheres em situação de violência", "180", null),
+    ParceiroPrincipal(Icons.Filled.Campaign, "Disque Denúncia Nacional", "Denúncias de violações de direitos humanos", "100", null),
+    ParceiroPrincipal(Icons.Filled.AccountBalance, "Ministério Público", "Defesa dos direitos sociais e individuais", "127", "http://www.mpsp.mp.br/")
+)
+
+val outrosParceiros = listOf(
+    "OAB - Ordem dos Advogados do Brasil",
+    "CRAS - Centro de Referência de Assistência Social",
+    "Casa da Mulher Brasileira",
+    "Movimento Negro Unificado (MNU)",
+    "ANTRA - Associação Nacional de Travestis e Transexuais",
+    "Pastoral Carcerária",
+    "Comissão de Direitos Humanos (Câmaras Municipais)"
+)
 
 // --- PREVIEWS ---
-@Preview(showBackground = true)
+@Preview(showBackground = true, device = "spec:shape=Normal,width=360,height=640,unit=dp,dpi=480")
 @Composable
 fun HomeScreenPreview() {
     AppTheme {
@@ -664,11 +804,11 @@ fun HomeScreenPreview() {
     }
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, device = "spec:shape=Normal,width=360,height=640,unit=dp,dpi=480")
 @Composable
-fun MeusDireitosScreenPreview() {
+fun ParceirosScreenPreview() {
     AppTheme {
-        MeusDireitosScreen(conteudoDireitos)
+        ParceirosScreen()
     }
 }
 
