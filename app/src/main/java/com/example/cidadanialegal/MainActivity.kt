@@ -7,37 +7,50 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 
 // --- Estrutura de Dados ---
 data class DireitoTopico(val titulo: String, val descricao: String)
@@ -74,16 +87,16 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     val colors = lightColorScheme(
-        primary = Color(0xFF005A9C),
+        primary = Color(0xFF315FB4),
         secondary = Color(0xFFE87722),
-        background = Color(0xFFF7F9FC), // Um cinza azulado muito claro
+        background = Color(0xFFF7F9FC),
         surface = Color.White,
         onPrimary = Color.White,
         onSecondary = Color.White,
         onBackground = Color(0xFF1A1C1E),
         onSurface = Color(0xFF1A1C1E),
         error = Color(0xFFB00020),
-        surfaceVariant = Color(0xFFEDF2F9) // Cor de fundo para cards e elementos de UI
+        surfaceVariant = Color(0xFFEDF2F9)
     )
 
     MaterialTheme(
@@ -111,7 +124,13 @@ fun CidadaniaLegalApp() {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("⚖️ Cidadania Legal") },
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppLogo(modifier = Modifier.size(28.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Text("Cidadania Legal")
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
                         titleContentColor = MaterialTheme.colorScheme.primary
@@ -120,7 +139,7 @@ fun CidadaniaLegalApp() {
                         val canPop = navController.previousBackStackEntry != null
                         AnimatedVisibility(visible = canPop, enter = fadeIn(), exit = fadeOut()) {
                             IconButton(onClick = { navController.navigateUp() }) {
-                                Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar")
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                             }
                         }
                     }
@@ -149,6 +168,174 @@ fun CidadaniaLegalApp() {
 }
 
 // --- ECRÃS ---
+
+// --- GERADOR DE DOCUMENTOS (NOVA VERSÃO) ---
+@Composable
+fun GeradorDocumentosScreen(snackbarHostState: SnackbarHostState) {
+    var nome by remember { mutableStateOf("") }
+    var cidade by remember { mutableStateOf("") }
+    var assunto by remember { mutableStateOf("") }
+    var descricao by remember { mutableStateOf("") }
+    var documentoGerado by remember { mutableStateOf<String?>(null) }
+    var estaAGerar by remember { mutableStateOf(false) }
+
+    val scope = rememberCoroutineScope()
+    val clipboardManager = LocalClipboardManager.current
+    val formCompleto = nome.isNotBlank() && cidade.isNotBlank() && assunto.isNotBlank() && descricao.isNotBlank()
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text("Gerador de Documentos", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Preencha os campos abaixo para criar um rascunho de documento formal.",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+            )
+        }
+
+        item { FormTextField(value = nome, onValueChange = { nome = it }, label = "Seu Nome Completo", icon = Icons.Filled.Person) }
+        item { FormTextField(value = cidade, onValueChange = { cidade = it }, label = "Sua Cidade", icon = Icons.Filled.LocationCity) }
+        item { FormTextField(value = assunto, onValueChange = { assunto = it }, label = "Assunto", placeholder = "Ex: Cobrança indevida, produto com defeito", icon = Icons.Filled.Edit) }
+        item {
+            OutlinedTextField(
+                value = descricao,
+                onValueChange = { descricao = it },
+                label = { Text("Descreva o problema detalhadamente") },
+                modifier = Modifier.fillMaxWidth().height(180.dp),
+                shape = MaterialTheme.shapes.medium
+            )
+        }
+
+        item {
+            Button(
+                onClick = {
+                    estaAGerar = true
+                    scope.launch {
+                        delay(1500) // Simulação de processamento
+                        val dataAtual = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("pt", "BR")).format(Date())
+                        documentoGerado = """
+                            **Para:** [Nome da Empresa ou Destinatário]
+                            **De:** $nome
+                            **Assunto:** $assunto
+
+                            Prezados(as),
+
+                            Eu, $nome, residente em $cidade, venho por meio desta comunicação formalizar a seguinte questão:
+
+                            $descricao
+
+                            Diante do exposto, solicito uma análise e uma solução para o problema apresentado.
+
+                            Agradeço a atenção e aguardo um breve retorno.
+
+                            Atenciosamente,
+
+                            $nome
+                            $cidade, $dataAtual
+                        """.trimIndent()
+                        estaAGerar = false
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                enabled = formCompleto && !estaAGerar
+            ) {
+                if (estaAGerar) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                } else {
+                    Text("Gerar Rascunho do Documento")
+                }
+            }
+        }
+
+        item {
+            AnimatedVisibility(visible = documentoGerado != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Rascunho Gerado:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                            IconButton(onClick = {
+                                clipboardManager.setText(AnnotatedString(documentoGerado!!))
+                                scope.launch { snackbarHostState.showSnackbar("Texto copiado!") }
+                            }) {
+                                Icon(Icons.Filled.ContentCopy, contentDescription = "Copiar Texto")
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(documentoGerado ?: "", style = MaterialTheme.typography.bodyMedium, lineHeight = 22.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TiraDuvidasScreen() {
+    val mensagens = remember { mutableStateListOf(Mensagem("Olá! Faça uma pergunta sobre seus direitos. Ex: 'Quais os meus direitos se fui demitido?'", false)) }
+    var input by remember { mutableStateOf(TextFieldValue("")) }
+    var estaAProcessar by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val listState = remember { androidx.compose.foundation.lazy.LazyListState() }
+
+    Column(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(mensagens) { msg ->
+                if(msg.estaEscrevendo) MessageBubbleLoading() else MessageBubble(msg)
+            }
+        }
+
+        Row(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Digite sua pergunta...") },
+                enabled = !estaAProcessar,
+                shape = MaterialTheme.shapes.medium
+            )
+            Spacer(Modifier.width(8.dp))
+            Button(
+                onClick = {
+                    if (input.text.isNotBlank()) {
+                        mensagens.add(Mensagem(input.text, true))
+                        input = TextFieldValue("")
+                        estaAProcessar = true
+                        mensagens.add(Mensagem("", false, estaEscrevendo = true))
+                        scope.launch { listState.animateScrollToItem(mensagens.size - 1) }
+
+                        scope.launch {
+                            delay(2500)
+                            mensagens.removeIf { it.estaEscrevendo }
+                            mensagens.add(Mensagem("Importante: esta é uma orientação geral e não substitui a consulta com um advogado. Para o seu caso específico, a recomendação é sempre procurar a Defensoria Pública.", false))
+                            estaAProcessar = false
+                            listState.animateScrollToItem(mensagens.size - 1)
+                        }
+                    }
+                },
+                enabled = !estaAProcessar && input.text.isNotBlank(),
+                modifier = Modifier.height(56.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Enviar")
+            }
+        }
+    }
+}
+
 
 @Composable
 fun HomeScreen(navController: NavController) {
@@ -244,135 +431,6 @@ fun MeusDireitosScreen(categorias: List<DireitoCategoria>) {
     }
 }
 
-@Composable
-fun TiraDuvidasScreen() {
-    val mensagens = remember { mutableStateListOf(Mensagem("Olá! Faça uma pergunta sobre seus direitos. Ex: 'Quais os meus direitos se fui demitido?'", false)) }
-    var input by remember { mutableStateOf(TextFieldValue("")) }
-    var estaAProcessar by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val listState = remember { androidx.compose.foundation.lazy.LazyListState() }
-
-    Column(Modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(mensagens) { msg -> MessageBubble(msg) }
-        }
-
-        Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Digite sua pergunta...") },
-                enabled = !estaAProcessar,
-                shape = MaterialTheme.shapes.medium
-            )
-            Spacer(Modifier.width(8.dp))
-            Button(
-                onClick = {
-                    if (input.text.isNotBlank()) {
-                        mensagens.add(Mensagem(input.text, true))
-                        input = TextFieldValue("")
-                        estaAProcessar = true
-                        mensagens.add(Mensagem("", false, estaEscrevendo = true))
-                        scope.launch { listState.animateScrollToItem(mensagens.size - 1) }
-
-                        scope.launch {
-                            delay(2500)
-                            mensagens.removeAt(mensagens.size - 1) // Remove o indicador "a escrever"
-                            mensagens.add(Mensagem("Importante: esta é uma orientação geral baseada em IA e não substitui a consulta com um advogado. Para o seu caso específico, a recomendação é sempre procurar a Defensoria Pública.", false))
-                            estaAProcessar = false
-                            listState.animateScrollToItem(mensagens.size - 1)
-                        }
-                    }
-                },
-                enabled = !estaAProcessar && input.text.isNotBlank(),
-                modifier = Modifier.height(56.dp)
-            ) {
-                Icon(Icons.Filled.Send, contentDescription = "Enviar")
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun GeradorDocumentosScreen(snackbarHostState: SnackbarHostState) {
-    var descricao by remember { mutableStateOf("") }
-    var tipoDocumento by remember { mutableStateOf("E-mail Formal") }
-    var documentoGerado by remember { mutableStateOf<String?>(null) }
-    var estaAGerar by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val clipboardManager = LocalClipboardManager.current
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text("Gerador de Documentos", style = MaterialTheme.typography.headlineSmall)
-
-        OutlinedTextField(value = descricao, onValueChange = { descricao = it }, label = { Text("Descreva seu problema") }, modifier = Modifier.fillMaxWidth().height(150.dp))
-
-        var expanded by remember { mutableStateOf(false) }
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-            OutlinedTextField(
-                value = tipoDocumento, onValueChange = {}, readOnly = true, label = { Text("Tipo de Documento") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier = Modifier.fillMaxWidth().menuAnchor()
-            )
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                listOf("E-mail Formal", "Carta de Reclamação", "Modelo de Reclamação").forEach {
-                    DropdownMenuItem(text = { Text(it) }, onClick = { tipoDocumento = it; expanded = false })
-                }
-            }
-        }
-
-        Button(
-            onClick = {
-                if(descricao.isNotBlank()) {
-                    estaAGerar = true
-                    scope.launch {
-                        delay(1500)
-                        documentoGerado = """Prezados(as),\n\nEu, [Nome Completo], CPF [Seu CPF], venho por meio deste documento registrar a seguinte questão:\n\n$descricao\n\nDiante do exposto, solicito uma solução.\nAguardando retorno.\n\nAtenciosamente,\n[Seu Nome Completo]\n[Sua Cidade], [Data]""".trimIndent()
-                        estaAGerar = false
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            enabled = !estaAGerar
-        ) {
-            if (estaAGerar) { CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp) } else { Text("Gerar Rascunho") }
-        }
-
-        AnimatedVisibility(visible = documentoGerado != null) {
-            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Rascunho Gerado:", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                        IconButton(onClick = {
-                            clipboardManager.setText(AnnotatedString(documentoGerado!!))
-                            scope.launch { snackbarHostState.showSnackbar("Texto copiado!") }
-                        }) {
-                            Icon(Icons.Filled.ContentCopy, contentDescription = "Copiar Texto")
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(documentoGerado ?: "", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun FaqScreen(faqs: List<FaqItem>) {
@@ -433,7 +491,9 @@ fun DenunciaScreen() {
                 OutlinedTextField(
                     value = tipoViolacao, onValueChange = {}, readOnly = true, label = { Text("Tipo de Violação") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
                 )
                 ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     listOf("Discriminação", "Violência Física/Psicológica", "Abuso de Autoridade", "Outro").forEach {
@@ -456,7 +516,6 @@ fun DenunciaScreen() {
     }
 }
 
-// --- ECRÃ PARCEIROS E APOIO (NOVA VERSÃO) ---
 @Composable
 fun ParceirosScreen() {
     LazyColumn(
@@ -497,6 +556,50 @@ fun ParceirosScreen() {
 }
 
 // --- COMPONENTES DE UI REUTILIZÁVEIS ---
+
+@Composable
+fun FormTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    icon: ImageVector,
+    placeholder: String? = null
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        placeholder = { placeholder?.let { Text(it) } },
+        leadingIcon = { Icon(imageVector = icon, contentDescription = null) },
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words)
+    )
+}
+
+@Composable
+fun AppLogo(modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.primary) {
+    Canvas(modifier = modifier) {
+        val strokeWidth = size.width * 0.12f
+        val shieldPath = Path().apply {
+            moveTo(size.width * 0.5f, 0f)
+            lineTo(size.width, size.height * 0.25f)
+            lineTo(size.width, size.height * 0.7f)
+            cubicTo(size.width, size.height * 0.7f, size.width * 0.5f, size.height, 0f, size.height * 0.7f)
+            lineTo(0f, size.height * 0.25f)
+            close()
+        }
+        drawPath(shieldPath, color, style = Stroke(width = strokeWidth))
+        val scaleTop = size.height * 0.35f
+        val scaleWidth = size.width * 0.6f
+        val scaleHeight = size.height * 0.4f
+        drawLine(color = color, start = Offset(center.x - scaleWidth / 2, scaleTop), end = Offset(center.x + scaleWidth / 2, scaleTop), strokeWidth = strokeWidth, cap = StrokeCap.Round)
+        drawLine(color = color, start = Offset(center.x, scaleTop), end = Offset(center.x, scaleTop + scaleHeight * 0.3f), strokeWidth = strokeWidth, cap = StrokeCap.Round)
+        drawArc(color = color, startAngle = 0f, sweepAngle = 180f, useCenter = false, topLeft = Offset(center.x - scaleWidth / 2 - size.width * 0.1f, scaleTop + scaleHeight * 0.2f), size = Size(size.width * 0.2f, size.height * 0.2f), style = Stroke(width = strokeWidth))
+        drawArc(color = color, startAngle = 0f, sweepAngle = 180f, useCenter = false, topLeft = Offset(center.x + scaleWidth / 2 - size.width * 0.1f, scaleTop + scaleHeight * 0.2f), size = Size(size.width * 0.2f, size.height * 0.2f), style = Stroke(width = strokeWidth))
+    }
+}
 
 @Composable
 fun PrimaryFeatureButton(navController: NavController, route: String, title: String, subtitle: String, icon: ImageVector) {
@@ -601,12 +704,25 @@ fun MessageBubble(mensagem: Mensagem) {
             shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(containerColor = if (mensagem.eDoUsuario) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            if (mensagem.estaEscrevendo) {
-                Row(Modifier.padding(horizontal = 12.dp, vertical = 18.dp)) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                }
-            } else {
-                Text(text = mensagem.texto, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyLarge)
+            Text(text = mensagem.texto, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+@Composable
+fun MessageBubbleLoading() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start
+    ) {
+        Card(
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Row(Modifier.padding(horizontal = 12.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+                Text("A pensar...", color = LocalContentColor.current.copy(alpha = 0.7f))
             }
         }
     }
@@ -678,7 +794,7 @@ fun ParceiroPrincipalCard(parceiro: ParceiroPrincipal) {
                 if (parceiro.telefone != null) {
                     Button(
                         onClick = {
-                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${parceiro.telefone}"))
+                            val intent = Intent(Intent.ACTION_DIAL, "tel:${parceiro.telefone}".toUri())
                             context.startActivity(intent)
                         },
                         modifier = Modifier.weight(1f),
@@ -693,7 +809,7 @@ fun ParceiroPrincipalCard(parceiro: ParceiroPrincipal) {
                 if (parceiro.site != null) {
                     Button(
                         onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(parceiro.site))
+                            val intent = Intent(Intent.ACTION_VIEW, parceiro.site.toUri())
                             context.startActivity(intent)
                         },
                         modifier = Modifier.weight(1f),
@@ -730,36 +846,12 @@ fun OutrasOrganizacoesCard() {
     }
 }
 
-
 // --- DADOS DA APLICAÇÃO (CONTEÚDO) ---
 
 val conteudoDireitos = listOf(
-    DireitoCategoria(
-        titulo = "Direito do Consumidor",
-        icon = Icons.Filled.ShoppingCart,
-        topicos = listOf(
-            DireitoTopico("Produto com Defeito", "• Produtos não duráveis (alimentos): 30 dias para reclamar.\n• Produtos duráveis (eletrónicos): 90 dias para reclamar.\nA loja tem 30 dias para consertar. Se não o fizer, você pode pedir um produto novo, seu dinheiro de volta ou um desconto."),
-            DireitoTopico("Cobrança Indevida", "Se você pagar uma conta que não devia ou com valor errado, tem direito a receber de volta o dobro do que pagou a mais."),
-            DireitoTopico("Direito de Arrependimento", "Para compras feitas fora da loja física (internet, telefone), você tem 7 dias, a contar da data de recebimento, para se arrepender, devolver o produto e receber o dinheiro de volta, sem precisar de um motivo.")
-        )
-    ),
-    DireitoCategoria(
-        titulo = "Direito Trabalhista",
-        icon = Icons.Filled.Work,
-        topicos = listOf(
-            DireitoTopico("Demissão Sem Justa Causa", "Você tem direito a:\n• Saldo de salário (dias trabalhados no mês).\n• Aviso prévio (trabalhado ou indenizado).\n• Férias vencidas e proporcionais + 1/3.\n• 13º salário proporcional.\n• Sacar o FGTS + multa de 40% paga pela empresa.\n• Seguro-desemprego (se cumprir os requisitos)."),
-            DireitoTopico("Acidente de Trabalho", "A empresa deve emitir a CAT (Comunicação de Acidente de Trabalho). Você tem direito a estabilidade no emprego por 12 meses após retornar do auxílio-doença do INSS."),
-            DireitoTopico("Horas Extras", "As horas que você trabalha além da sua jornada normal devem ser pagas com um acréscimo de, no mínimo, 50% sobre o valor da hora normal.")
-        )
-    ),
-    DireitoCategoria(
-        titulo = "Violência Doméstica",
-        icon = Icons.Filled.Favorite,
-        topicos = listOf(
-            DireitoTopico("Tipos de Violência", "A Lei Maria da Penha protege contra 5 tipos de violência:\n• Física (agressões)\n• Psicológica (ameaças, humilhação)\n• Sexual (forçar atos sexuais)\n• Patrimonial (reter dinheiro, destruir bens)\n• Moral (calúnia, difamação)."),
-            DireitoTopico("Medidas Protetivas", "São ordens judiciais para proteger a vítima. O agressor pode ser proibido de se aproximar ou de entrar em contato. Podem ser pedidas em qualquer delegacia, de preferência na Delegacia da Mulher.")
-        )
-    )
+    DireitoCategoria("Direito do Consumidor", Icons.Filled.ShoppingCart, listOf(DireitoTopico("Produto com Defeito", "• Produtos não duráveis (alimentos): 30 dias para reclamar.\n• Produtos duráveis (eletrónicos): 90 dias para reclamar.\nA loja tem 30 dias para consertar. Se não o fizer, você pode pedir um produto novo, seu dinheiro de volta ou um desconto."), DireitoTopico("Cobrança Indevida", "Se você pagar uma conta que não devia ou com valor errado, tem direito a receber de volta o dobro do que pagou a mais."), DireitoTopico("Direito de Arrependimento", "Para compras feitas fora da loja física (internet, telefone), você tem 7 dias, a contar da data de recebimento, para se arrepender, devolver o produto e receber o dinheiro de volta, sem precisar de um motivo."))),
+    DireitoCategoria("Direito Trabalhista", Icons.Filled.Work, listOf(DireitoTopico("Demissão Sem Justa Causa", "Você tem direito a:\n• Saldo de salário (dias trabalhados no mês).\n• Aviso prévio (trabalhado ou indenizado).\n• Férias vencidas e proporcionais + 1/3.\n• 13º salário proporcional.\n• Sacar o FGTS + multa de 40% paga pela empresa.\n• Seguro-desemprego (se cumprir os requisitos)."), DireitoTopico("Acidente de Trabalho", "A empresa deve emitir a CAT (Comunicação de Acidente de Trabalho). Você tem direito a estabilidade no emprego por 12 meses após retornar do auxílio-doença do INSS."), DireitoTopico("Horas Extras", "As horas que você trabalha além da sua jornada normal devem ser pagas com um acréscimo de, no mínimo, 50% sobre o valor da hora normal."))),
+    DireitoCategoria("Violência Doméstica", Icons.Filled.Favorite, listOf(DireitoTopico("Tipos de Violência", "A Lei Maria da Penha protege contra 5 tipos de violência:\n• Física (agressões)\n• Psicológica (ameaças, humilhação)\n• Sexual (forçar atos sexuais)\n• Patrimonial (reter dinheiro, destruir bens)\n• Moral (calúnia, difamação)."), DireitoTopico("Medidas Protetivas", "São ordens judiciais para proteger a vítima. O agressor pode ser proibido de se aproximar ou de entrar em contato. Podem ser pedidas em qualquer delegacia, de preferência na Delegacia da Mulher.")))
 )
 
 val conteudoGlossario = listOf(
@@ -796,7 +888,7 @@ val outrosParceiros = listOf(
 )
 
 // --- PREVIEWS ---
-@Preview(showBackground = true, device = "spec:shape=Normal,width=360,height=640,unit=dp,dpi=480")
+@Preview(showBackground = true, device = "spec:width=360dp,height=640dp,dpi=480")
 @Composable
 fun HomeScreenPreview() {
     AppTheme {
@@ -804,7 +896,7 @@ fun HomeScreenPreview() {
     }
 }
 
-@Preview(showBackground = true, device = "spec:shape=Normal,width=360,height=640,unit=dp,dpi=480")
+@Preview(showBackground = true, device = "spec:width=360dp,height=640dp,dpi=480")
 @Composable
 fun ParceirosScreenPreview() {
     AppTheme {
