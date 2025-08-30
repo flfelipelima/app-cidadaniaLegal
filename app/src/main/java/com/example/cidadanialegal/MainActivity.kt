@@ -56,6 +56,7 @@ import java.util.*
 data class DireitoTopico(val titulo: String, val descricao: String)
 data class DireitoCategoria(val titulo: String, val icon: ImageVector, val topicos: List<DireitoTopico>)
 data class GlossarioTermo(val termo: String, val definicao: String)
+data class GlossarioCategoria(val nome: String, val icon: ImageVector, val termos: List<GlossarioTermo>)
 data class FaqItem(val pergunta: String, val resposta: String)
 data class Mensagem(val texto: String, val eDoUsuario: Boolean, val estaEscrevendo: Boolean = false)
 data class ParceiroPrincipal(val icon: ImageVector, val nome: String, val descricao: String, val telefone: String?, val site: String?)
@@ -161,7 +162,7 @@ fun CidadaniaLegalApp() {
                 composable(Routes.FAQ) { FaqScreen(conteudoFaq) }
                 composable(Routes.DENUNCIA) { DenunciaScreen() }
                 composable(Routes.PARCEIROS) { ParceirosScreen() }
-                composable(Routes.GLOSSARIO) { GlossarioScreen(conteudoGlossario) }
+                composable(Routes.GLOSSARIO) { GlossarioScreen(categoriasGlossario) }
             }
         }
     }
@@ -169,7 +170,88 @@ fun CidadaniaLegalApp() {
 
 // --- ECRÃS ---
 
-// --- GERADOR DE DOCUMENTOS (NOVA VERSÃO) ---
+// --- GLOSSÁRIO (NOVA VERSÃO COM POP-UP) ---
+@Composable
+fun GlossarioScreen(categorias: List<GlossarioCategoria>) {
+    var searchQuery by remember { mutableStateOf("") }
+    var termoSelecionado by remember { mutableStateOf<GlossarioTermo?>(null) }
+
+    val categoriasFiltradas = remember(searchQuery, categorias) {
+        if (searchQuery.isBlank()) {
+            categorias
+        } else {
+            categorias.mapNotNull { categoria ->
+                val termosFiltrados = categoria.termos.filter { termo ->
+                    termo.termo.contains(searchQuery, ignoreCase = true) ||
+                            termo.definicao.contains(searchQuery, ignoreCase = true)
+                }
+                if (termosFiltrados.isNotEmpty()) {
+                    categoria.copy(termos = termosFiltrados)
+                } else {
+                    null
+                }
+            }
+        }
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text("Decifrando o Juridiquês", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Encontre aqui a tradução de termos complicados do mundo jurídico para uma linguagem que todos entendem.",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+            )
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = { Text("Pesquisar termo...") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "Pesquisar") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium
+            )
+        }
+
+        if (categoriasFiltradas.isEmpty()) {
+            item {
+                Text(
+                    "Nenhum termo encontrado para \"$searchQuery\"",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
+                )
+            }
+        } else {
+            items(categoriasFiltradas) { categoria ->
+                CategoriaGlossarioItem(
+                    categoria = categoria,
+                    onTermoClick = { termo ->
+                        termoSelecionado = termo
+                    }
+                )
+            }
+        }
+    }
+
+    if (termoSelecionado != null) {
+        AlertDialog(
+            onDismissRequest = { termoSelecionado = null },
+            title = { Text(termoSelecionado!!.termo, style = MaterialTheme.typography.titleLarge) },
+            text = { Text(termoSelecionado!!.definicao, style = MaterialTheme.typography.bodyLarge) },
+            confirmButton = {
+                TextButton(onClick = { termoSelecionado = null }) {
+                    Text("FECHAR")
+                }
+            },
+            shape = MaterialTheme.shapes.large
+        )
+    }
+}
+
 @Composable
 fun GeradorDocumentosScreen(snackbarHostState: SnackbarHostState) {
     var nome by remember { mutableStateOf("") }
@@ -336,7 +418,6 @@ fun TiraDuvidasScreen() {
     }
 }
 
-
 @Composable
 fun HomeScreen(navController: NavController) {
     LazyColumn(
@@ -351,30 +432,15 @@ fun HomeScreen(navController: NavController) {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
-                    Text(
-                        "Olá!",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White
-                    )
-                    Text(
-                        "Bem-vindo(a) ao Cidadania Legal. Como podemos ajudar hoje?",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.9f),
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
+                    Text( "Olá!", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+                    Text( "Bem-vindo(a) ao Cidadania Legal. Como podemos ajudar hoje?", style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.9f), modifier = Modifier.padding(top = 8.dp))
                 }
             }
             Spacer(Modifier.height(24.dp))
         }
 
         item {
-            PrimaryFeatureButton(
-                navController = navController,
-                route = Routes.MEUS_DIREITOS,
-                title = "Conheça Seus Direitos",
-                subtitle = "O primeiro passo é a informação. Navegue por temas e entenda seus direitos.",
-                icon = Icons.Filled.Gavel
-            )
+            PrimaryFeatureButton(navController = navController, route = Routes.MEUS_DIREITOS, title = "Conheça Seus Direitos", subtitle = "O primeiro passo é a informação. Navegue por temas e entenda seus direitos.", icon = Icons.Filled.Gavel)
             Spacer(Modifier.height(16.dp))
         }
 
@@ -389,7 +455,7 @@ fun HomeScreen(navController: NavController) {
 
         item {
             Text("Apoio e Recursos", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-            SupportFeatureButton(navController, Routes.GLOSSARIO, "Juridiquês", "Traduza termos legais complicados.", Icons.Filled.Translate)
+            SupportFeatureButton(navController, Routes.GLOSSARIO, "Decifrando o Juridiquês", "Traduza termos legais complicados.", Icons.Filled.Translate)
             SupportFeatureButton(navController, Routes.FAQ, "Dúvidas Frequentes", "Encontre respostas para perguntas comuns.", Icons.Filled.Quiz)
             SupportFeatureButton(navController, Routes.PARCEIROS, "Encontre Apoio", "Conecte-se com ONGs e Defensorias.", Icons.Filled.People)
             SupportFeatureButton(navController, Routes.DENUNCIA, "Denúncia Anônima", "Registre violações de direitos de forma segura.", Icons.Filled.Report, isDestructive = true)
@@ -431,28 +497,11 @@ fun MeusDireitosScreen(categorias: List<DireitoCategoria>) {
     }
 }
 
-
 @Composable
 fun FaqScreen(faqs: List<FaqItem>) {
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Dúvidas Frequentes", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 8.dp)) }
         items(faqs) { (pergunta, resposta) -> FaqItemCard(pergunta, resposta) }
-    }
-}
-
-@Composable
-fun GlossarioScreen(termos: List<GlossarioTermo>) {
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Glossário Jurídico (Juridiquês)", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 8.dp)) }
-        items(termos) { (termo, definicao) ->
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(termo, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.height(4.dp))
-                    Text(definicao, style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-        }
     }
 }
 
@@ -464,10 +513,7 @@ fun DenunciaScreen() {
     var denunciaEnviada by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         if(denunciaEnviada) {
@@ -483,33 +529,17 @@ fun DenunciaScreen() {
         } else {
             Text("Registrar Violação de Direitos", style = MaterialTheme.typography.headlineSmall)
             Text("Este canal é para registro anônimo e não solicita dados pessoais. Sua denúncia é confidencial.", style = MaterialTheme.typography.bodyMedium)
-
             OutlinedTextField(value = descricao, onValueChange = { descricao = it }, label = { Text("Descreva a violação") }, modifier = Modifier.fillMaxWidth().height(150.dp))
-
             var expanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-                OutlinedTextField(
-                    value = tipoViolacao, onValueChange = {}, readOnly = true, label = { Text("Tipo de Violação") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor()
-                )
+                OutlinedTextField(value = tipoViolacao, onValueChange = {}, readOnly = true, label = { Text("Tipo de Violação") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }, modifier = Modifier.fillMaxWidth().menuAnchor())
                 ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     listOf("Discriminação", "Violência Física/Psicológica", "Abuso de Autoridade", "Outro").forEach {
                         DropdownMenuItem(text = { Text(it) }, onClick = { tipoViolacao = it; expanded = false })
                     }
                 }
             }
-
-            Button(
-                onClick = {
-                    denunciaEnviada = true
-                    descricao = ""
-                },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            ) {
+            Button(onClick = { denunciaEnviada = true; descricao = "" }, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
                 Text("Enviar Denúncia Anônima")
             }
         }
@@ -523,48 +553,53 @@ fun ParceirosScreen() {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Icon(
-                imageVector = Icons.Filled.Handshake,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.fillMaxWidth().wrapContentSize(Alignment.Center).size(48.dp)
-            )
+            Icon(imageVector = Icons.Filled.Handshake, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.fillMaxWidth().wrapContentSize(Alignment.Center).size(48.dp))
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                "Parceiros e Apoio",
-                style = MaterialTheme.typography.headlineSmall,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Text(
-                "Organizações parceiras que podem ajudar você",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Text("Parceiros e Apoio", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text("Organizações parceiras que podem ajudar você", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(16.dp))
         }
-
         item { EmergencyNumbersCard() }
-
-        items(parceirosPrincipais) { parceiro ->
-            ParceiroPrincipalCard(parceiro = parceiro)
-        }
-
+        items(parceirosPrincipais) { parceiro -> ParceiroPrincipalCard(parceiro = parceiro) }
         item { OutrasOrganizacoesCard() }
     }
 }
 
 // --- COMPONENTES DE UI REUTILIZÁVEIS ---
+@Composable
+fun CategoriaGlossarioItem(categoria: GlossarioCategoria, onTermoClick: (GlossarioTermo) -> Unit) {
+    var expandido by remember { mutableStateOf(false) }
+    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
+        Column {
+            Row(
+                modifier = Modifier.clickable { expandido = !expandido }.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(categoria.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(16.dp))
+                Text(categoria.nome, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Icon(if (expandido) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null)
+            }
+
+            AnimatedVisibility(visible = expandido, enter = expandVertically(), exit = shrinkVertically()) {
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                    categoria.termos.forEach { termo ->
+                        Row(
+                            Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { onTermoClick(termo) }.padding(vertical = 12.dp, horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(termo.termo, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                            Icon(Icons.Filled.ChevronRight, contentDescription = "Ver detalhes", tint = Color.Gray)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
-fun FormTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    icon: ImageVector,
-    placeholder: String? = null
-) {
+fun FormTextField(value: String, onValueChange: (String) -> Unit, label: String, icon: ImageVector, placeholder: String? = null) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -667,17 +702,9 @@ fun CategoriaDireitoItem(categoria: DireitoCategoria, onTopicClick: (DireitoTopi
                 Icon(categoria.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(16.dp))
                 Text(categoria.titulo, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                Icon(
-                    imageVector = if (expandido) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = if (expandido) "Recolher" else "Expandir"
-                )
+                Icon(if (expandido) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null)
             }
-
-            AnimatedVisibility(
-                visible = expandido,
-                enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
-                exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
-            ) {
+            AnimatedVisibility(visible = expandido, enter = expandVertically(), exit = shrinkVertically()) {
                 Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                     categoria.topicos.forEach { topico ->
                         Row(
@@ -774,12 +801,7 @@ fun ParceiroPrincipalCard(parceiro: ParceiroPrincipal) {
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = parceiro.icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(40.dp)
-                )
+                Icon(imageVector = parceiro.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
                 Spacer(Modifier.width(16.dp))
                 Column {
                     Text(parceiro.nome, style = MaterialTheme.typography.titleLarge)
@@ -793,10 +815,7 @@ fun ParceiroPrincipalCard(parceiro: ParceiroPrincipal) {
             ) {
                 if (parceiro.telefone != null) {
                     Button(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_DIAL, "tel:${parceiro.telefone}".toUri())
-                            context.startActivity(intent)
-                        },
+                        onClick = { val intent = Intent(Intent.ACTION_DIAL, "tel:${parceiro.telefone}".toUri()); context.startActivity(intent) },
                         modifier = Modifier.weight(1f),
                         shape = MaterialTheme.shapes.medium,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -808,10 +827,7 @@ fun ParceiroPrincipalCard(parceiro: ParceiroPrincipal) {
                 }
                 if (parceiro.site != null) {
                     Button(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, parceiro.site.toUri())
-                            context.startActivity(intent)
-                        },
+                        onClick = { val intent = Intent(Intent.ACTION_VIEW, parceiro.site.toUri()); context.startActivity(intent) },
                         modifier = Modifier.weight(1f),
                         shape = MaterialTheme.shapes.medium,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -854,12 +870,40 @@ val conteudoDireitos = listOf(
     DireitoCategoria("Violência Doméstica", Icons.Filled.Favorite, listOf(DireitoTopico("Tipos de Violência", "A Lei Maria da Penha protege contra 5 tipos de violência:\n• Física (agressões)\n• Psicológica (ameaças, humilhação)\n• Sexual (forçar atos sexuais)\n• Patrimonial (reter dinheiro, destruir bens)\n• Moral (calúnia, difamação)."), DireitoTopico("Medidas Protetivas", "São ordens judiciais para proteger a vítima. O agressor pode ser proibido de se aproximar ou de entrar em contato. Podem ser pedidas em qualquer delegacia, de preferência na Delegacia da Mulher.")))
 )
 
-val conteudoGlossario = listOf(
-    GlossarioTermo("Habeas Corpus", "É uma ação judicial para proteger o direito de liberdade de uma pessoa quando ela é presa ou ameaçada de ser presa ilegalmente."),
-    GlossarioTermo("Jurisprudência", "É o conjunto de decisões e interpretações que os tribunais dão para as leis. Serve como um guia para casos futuros parecidos."),
-    GlossarioTermo("Petição Inicial", "É o primeiro documento que se apresenta à Justiça para iniciar um processo, explicando o caso e o que se está a pedir."),
-    GlossarioTermo("Trânsito em Julgado", "Uma decisão judicial da qual não se pode mais recorrer, ou seja, é definitiva."),
-    GlossarioTermo("Liminar", "Uma decisão rápida e provisória que o juiz toma no início de um processo para evitar um dano grave e urgente, antes da decisão final.")
+val categoriasGlossario = listOf(
+    GlossarioCategoria("Direito de Família", Icons.Filled.FamilyRestroom, listOf(
+        GlossarioTermo("Alimentos (Pensão Alimentícia)", "Valor pago para ajudar no sustento de filhos ou ex-cônjuge que não consegue se manter sozinho."),
+        GlossarioTermo("Guarda Compartilhada", "Quando pai e mãe, mesmo separados, tomam as decisões importantes sobre a vida dos filhos em conjunto."),
+        GlossarioTermo("Tutela", "Quando um adulto é nomeado por um juiz para cuidar de um menor de idade que não tem pais."),
+        GlossarioTermo("Divórcio", "Processo legal que encerra oficialmente um casamento."),
+        GlossarioTermo("União Estável", "Quando um casal vive junto como se fosse casado, de forma pública e com a intenção de constituir família.")
+    )),
+    GlossarioCategoria("Direito do Trabalho", Icons.Filled.Work, listOf(
+        GlossarioTermo("Rescisão", "É o fim do contrato de trabalho, seja por demissão ou por pedido de demissão."),
+        GlossarioTermo("Justa Causa", "Demissão por uma falta grave cometida pelo empregado, que perde a maioria dos seus direitos."),
+        GlossarioTermo("FGTS", "Fundo de Garantia do Tempo de Serviço. Um valor que a empresa deposita todo mês numa conta do empregado."),
+        GlossarioTermo("INSS", "Instituto Nacional do Seguro Social. Responsável pela aposentadoria, auxílio-doença e outros benefícios."),
+        GlossarioTermo("Aviso Prévio", "Comunicação antecipada do fim do contrato de trabalho, que deve ser feita com pelo menos 30 dias de antecedência.")
+    )),
+    GlossarioCategoria("Direito do Consumidor", Icons.Filled.ShoppingCart, listOf(
+        GlossarioTermo("Vício Oculto", "Defeito de fabricação que não é aparente e só se manifesta depois de um tempo de uso do produto."),
+        GlossarioTermo("Prazo de Arrependimento", "Direito de desistir de uma compra feita pela internet ou telefone em até 7 dias após o recebimento."),
+        GlossarioTermo("Garantia Legal", "Garantia obrigatória por lei. São 30 dias para produtos não duráveis e 90 dias para produtos duráveis."),
+        GlossarioTermo("Oferta", "Toda informação ou publicidade sobre um produto ou serviço. A empresa é obrigada a cumprir o que prometeu.")
+    )),
+    GlossarioCategoria("Direito Criminal", Icons.Filled.LocalPolice, listOf(
+        GlossarioTermo("Flagrante Delito", "Quando alguém é pego cometendo um crime ou logo após cometê-lo."),
+        GlossarioTermo("Inquérito Policial", "Investigação conduzida pela polícia para apurar um crime e descobrir quem o cometeu."),
+        GlossarioTermo("Denúncia", "Peça inicial do processo criminal, feita pelo Ministério Público, acusando alguém formalmente de um crime."),
+        GlossarioTermo("Queixa-Crime", "Peça inicial de alguns processos criminais, feita pela própria vítima ou seu representante legal.")
+    )),
+    GlossarioCategoria("Termos Gerais", Icons.Filled.Gavel, listOf(
+        GlossarioTermo("Habeas Corpus", "Ação para proteger o direito de liberdade de alguém que foi preso ou está ameaçado de ser preso ilegalmente."),
+        GlossarioTermo("Jurisprudência", "Conjunto de decisões dos tribunais sobre um mesmo tema, que serve de orientação para casos futuros."),
+        GlossarioTermo("Petição Inicial", "Documento que inicia um processo na Justiça, onde se explica o caso e o que se está a pedir."),
+        GlossarioTermo("Liminar", "Decisão rápida e provisória de um juiz no início de um processo para evitar um dano urgente."),
+        GlossarioTermo("Trânsito em Julgado", "Quando uma decisão judicial se torna definitiva e não se pode mais recorrer.")
+    ))
 )
 
 val conteudoFaq = listOf(
@@ -870,11 +914,11 @@ val conteudoFaq = listOf(
 )
 
 val parceirosPrincipais = listOf(
-    ParceiroPrincipal(Icons.Filled.AccountBalance, "Defensoria Pública", "Assistência jurídica gratuita para quem não pode pagar advogado", "129", "https://www.defensoria.sp.def.br/"),
-    ParceiroPrincipal(Icons.Filled.Gavel, "Procon", "Proteção e defesa dos direitos do consumidor", "151", "https://www.procon.sp.gov.br/"),
-    ParceiroPrincipal(Icons.Filled.Female, "Central de Atendimento à Mulher", "Orientação para mulheres em situação de violência", "180", null),
-    ParceiroPrincipal(Icons.Filled.Campaign, "Disque Denúncia Nacional", "Denúncias de violações de direitos humanos", "100", null),
-    ParceiroPrincipal(Icons.Filled.AccountBalance, "Ministério Público", "Defesa dos direitos sociais e individuais", "127", "http://www.mpsp.mp.br/")
+    ParceiroPrincipal(Icons.Filled.AccountBalance, "Defensoria Pública", "Assistência jurídica gratuita", "129", "https://www.defensoria.sp.def.br/"),
+    ParceiroPrincipal(Icons.Filled.Gavel, "Procon", "Defesa dos direitos do consumidor", "151", "https://www.procon.sp.gov.br/"),
+    ParceiroPrincipal(Icons.Filled.Female, "Central de Atendimento à Mulher", "Orientação em situação de violência", "180", null),
+    ParceiroPrincipal(Icons.Filled.Campaign, "Disque Direitos Humanos", "Denúncias de violações", "100", null),
+    ParceiroPrincipal(Icons.Filled.AccountBalance, "Ministério Público", "Defesa dos direitos sociais", "127", "http://www.mpsp.mp.br/")
 )
 
 val outrosParceiros = listOf(
@@ -898,9 +942,9 @@ fun HomeScreenPreview() {
 
 @Preview(showBackground = true, device = "spec:width=360dp,height=640dp,dpi=480")
 @Composable
-fun ParceirosScreenPreview() {
+fun GlossarioScreenPreview() {
     AppTheme {
-        ParceirosScreen()
+        GlossarioScreen(categoriasGlossario)
     }
 }
 
