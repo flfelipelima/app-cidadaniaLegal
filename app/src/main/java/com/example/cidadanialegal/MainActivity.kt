@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -51,6 +53,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import com.example.cidadanialegal.R
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
 
 // --- Estrutura de Dados ---
 data class DireitoTopico(val titulo: String, val descricao: String)
@@ -615,24 +623,16 @@ fun FormTextField(value: String, onValueChange: (String) -> Unit, label: String,
 
 @Composable
 fun AppLogo(modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.primary) {
-    Canvas(modifier = modifier) {
-        val strokeWidth = size.width * 0.12f
-        val shieldPath = Path().apply {
-            moveTo(size.width * 0.5f, 0f)
-            lineTo(size.width, size.height * 0.25f)
-            lineTo(size.width, size.height * 0.7f)
-            cubicTo(size.width, size.height * 0.7f, size.width * 0.5f, size.height, 0f, size.height * 0.7f)
-            lineTo(0f, size.height * 0.25f)
-            close()
-        }
-        drawPath(shieldPath, color, style = Stroke(width = strokeWidth))
-        val scaleTop = size.height * 0.35f
-        val scaleWidth = size.width * 0.6f
-        val scaleHeight = size.height * 0.4f
-        drawLine(color = color, start = Offset(center.x - scaleWidth / 2, scaleTop), end = Offset(center.x + scaleWidth / 2, scaleTop), strokeWidth = strokeWidth, cap = StrokeCap.Round)
-        drawLine(color = color, start = Offset(center.x, scaleTop), end = Offset(center.x, scaleTop + scaleHeight * 0.3f), strokeWidth = strokeWidth, cap = StrokeCap.Round)
-        drawArc(color = color, startAngle = 0f, sweepAngle = 180f, useCenter = false, topLeft = Offset(center.x - scaleWidth / 2 - size.width * 0.1f, scaleTop + scaleHeight * 0.2f), size = Size(size.width * 0.2f, size.height * 0.2f), style = Stroke(width = strokeWidth))
-        drawArc(color = color, startAngle = 0f, sweepAngle = 180f, useCenter = false, topLeft = Offset(center.x + scaleWidth / 2 - size.width * 0.1f, scaleTop + scaleHeight * 0.2f), size = Size(size.width * 0.2f, size.height * 0.2f), style = Stroke(width = strokeWidth))
+    Box(
+        modifier = modifier
+            .background(Color.White, shape = CircleShape)
+            .padding(4.dp)
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.logo_c),
+            contentDescription = "Logomarca Cidadania Legal",
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
@@ -947,4 +947,3 @@ fun GlossarioScreenPreview() {
         GlossarioScreen(categoriasGlossario)
     }
 }
-
